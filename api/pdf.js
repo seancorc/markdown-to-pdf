@@ -1,6 +1,6 @@
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
-
+// puppeteer-core and @sparticuz/chromium are ESM-only, so they must be loaded
+// with dynamic import() from this CommonJS function.
+//
 // On Vercel the function runs on AWS Lambda, where we use the bundled
 // serverless Chromium. Locally (vercel dev) that Linux binary can't run, so
 // fall back to the machine's installed Chrome.
@@ -9,7 +9,9 @@ const LOCAL_CHROME =
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 async function launchBrowser() {
+  const puppeteer = (await import('puppeteer-core')).default;
   if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const chromium = (await import('@sparticuz/chromium')).default;
     return puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
