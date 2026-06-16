@@ -8,20 +8,26 @@ const LOCAL_CHROME =
   process.env.CHROME_PATH ||
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
+// We're running locally (vercel dev / plain node) only when VERCEL_ENV is
+// "development" or the VERCEL env is absent. In production/preview on Vercel
+// we always use the bundled serverless Chromium.
+const isLocalDev =
+  process.env.VERCEL_ENV === 'development' || !process.env.VERCEL;
+
 async function launchBrowser() {
   const puppeteer = (await import('puppeteer-core')).default;
-  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    const chromium = (await import('@sparticuz/chromium')).default;
+  if (isLocalDev) {
     return puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath: LOCAL_CHROME,
       headless: 'shell',
+      args: ['--no-sandbox'],
     });
   }
+  const chromium = (await import('@sparticuz/chromium')).default;
   return puppeteer.launch({
-    executablePath: LOCAL_CHROME,
+    args: chromium.args,
+    executablePath: await chromium.executablePath(),
     headless: 'shell',
-    args: ['--no-sandbox'],
   });
 }
 
