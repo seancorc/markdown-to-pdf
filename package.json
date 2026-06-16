@@ -1,0 +1,24 @@
+{
+  "name": "markdown-to-pdf",
+  "version": "1.0.0",
+  "description": "Paste Markdown, see a styled live preview, and export a clean, print-quality PDF. Fully client-side: no backend, no build step, no dependencies to install.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seancorc/markdown-to-pdf.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/seancorc/markdown-to-pdf/issues"
+  },
+  "homepage": "https://github.com/seancorc/markdown-to-pdf#readme",
+  "dependencies": {
+    "@sparticuz/chromium": "^147.0.0",
+    "puppeteer-core": "^25.1.0"
+  }
+}

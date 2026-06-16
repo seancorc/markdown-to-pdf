@@ -63,6 +63,7 @@
       cursor: pointer;
     }
     .download:hover { background: var(--accent-hover); }
+    .download:disabled { opacity: 0.6; cursor: default; }
 
     .workspace {
       flex: 1;
@@ -339,7 +340,7 @@
     const sample = `# Markdown to PDF
 
 Paste your Markdown on the left. The styled preview updates live on the right.
-When it looks right, click **Download PDF** and choose "Save as PDF".
+When it looks right, click **Download PDF** and the file downloads instantly.
 
 ## Features
 
@@ -371,9 +372,6 @@ function greet(name) {
 
 console.log(greet("world"));
 \`\`\`
-
-> Tip: in the print dialog, set margins to "Default" and enable
-> "Background graphics" for the best-looking result.
 `;
 
     const input = document.getElementById('input');
@@ -502,8 +500,48 @@ console.log(greet("world"));
       renderList();
     });
 
+    const HLJS_CSS = 'https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/styles/github.min.css';
+    const downloadBtn = document.getElementById('download');
+
+    // Send the rendered document (with the same CSS the preview uses) to the
+    // server, which renders it with headless Chrome and returns a real PDF.
+    async function downloadPdf() {
+      const styles = [...document.querySelectorAll('style')].map((s) => s.textContent).join('\n');
+      const html =
+        '<!doctype html><html><head><meta charset="utf-8">' +
+        '<link rel="stylesheet" href="' + HLJS_CSS + '">' +
+        '<style>' + styles + '</style></head><body>' +
+        preview.outerHTML +
+        '</body></html>';
+      const fileName = (titleOf(input.value).replace(/[\\/:*?"<>|]/g, '').trim() || 'document') + '.pdf';
+
+      const originalLabel = downloadBtn.textContent;
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = 'Generating…';
+      try {
+        const res = await fetch('/api/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html }),
+        });
+        if (!res.ok) throw new Error('PDF service returned ' + res.status);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Could not generate PDF: ' + ((err && err.message) || err));
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = originalLabel;
+      }
+    }
+
     document.getElementById('new-doc').addEventListener('click', newDoc);
-    document.getElementById('download').addEventListener('click', () => window.print());
+    downloadBtn.addEventListener('click', downloadPdf);
 
     loadFromStorage();
     input.value = activeDoc().content;
