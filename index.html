@@ -273,6 +273,9 @@
 
     .document img { max-width: 100%; }
 
+    .document .mermaid-diagram { margin: 0 0 1em; text-align: center; }
+    .document .mermaid-diagram svg { max-width: 100%; height: auto; }
+
     .document hr {
       border: none;
       border-top: 1px solid #e2e4e8;
@@ -301,7 +304,7 @@
         border-radius: 0;
         font-size: 12pt;
       }
-      .document pre, .document img, .document table, .document blockquote { break-inside: avoid; }
+      .document pre, .document img, .document table, .document blockquote, .document .mermaid-diagram { break-inside: avoid; }
       .document h1, .document h2, .document h3,
       .document h4, .document h5, .document h6 { break-after: avoid; }
     }
@@ -336,6 +339,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
     const sample = `# Markdown to PDF
 
@@ -429,9 +433,31 @@ console.log(greet("world"));
       return new Date(ts).toLocaleDateString();
     }
 
+    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+    let mermaidCounter = 0;
+
     function render() {
       preview.innerHTML = marked.parse(input.value);
-      preview.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+      preview.querySelectorAll('pre code:not(.language-mermaid)').forEach((block) => hljs.highlightElement(block));
+      renderMermaid();
+    }
+
+    async function renderMermaid() {
+      const blocks = preview.querySelectorAll('pre code.language-mermaid');
+      for (const block of blocks) {
+        const pre = block.closest('pre');
+        if (!pre || !pre.parentNode) continue;
+        try {
+          const { svg } = await mermaid.render('mermaid-' + mermaidCounter++, block.textContent);
+          if (!pre.parentNode) continue;
+          const figure = document.createElement('div');
+          figure.className = 'mermaid-diagram';
+          figure.innerHTML = svg;
+          pre.replaceWith(figure);
+        } catch (_) {
+          // Leave the original code block in place if the diagram is invalid.
+        }
+      }
     }
 
     function renderList() {
