@@ -70,6 +70,94 @@
       min-height: 0;
     }
 
+    .sidebar {
+      width: 260px;
+      flex: 0 0 260px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin: 0;
+    }
+    .new-doc {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .new-doc:hover { border-color: var(--accent); color: var(--accent); }
+
+    .doc-list {
+      flex: 1;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .doc-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .doc-item:hover { background: #f3f4f6; }
+    .doc-item.active { background: #e8f0fe; }
+
+    .doc-item-main { flex: 1; min-width: 0; }
+    .doc-item-title {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .doc-item-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .doc-delete {
+      appearance: none;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      opacity: 0;
+    }
+    .doc-item:hover .doc-delete { opacity: 1; }
+    .doc-delete:hover { background: #fde2e2; color: #b91c1c; }
+
+    .storage-note {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
     .editor, .preview-pane {
       flex: 1 1 50%;
       min-width: 0;
@@ -194,13 +282,14 @@
 
     @media (max-width: 720px) {
       .workspace { flex-direction: column; }
+      .sidebar { width: auto; flex: 0 0 auto; max-height: 30vh; border-right: none; border-bottom: 1px solid var(--border); }
       #input { border-right: none; border-bottom: 1px solid var(--border); }
     }
 
     /* Print: show only the document, formatted for paper */
     @media print {
       body { background: #fff; display: block; }
-      .toolbar, .editor { display: none !important; }
+      .toolbar, .editor, .sidebar { display: none !important; }
       .workspace { display: block; }
       .preview-pane { display: block; overflow: visible; padding: 0; }
       .document {
@@ -225,6 +314,17 @@
   </header>
 
   <main class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Documents</h2>
+        <button class="new-doc" id="new-doc">+ New</button>
+      </div>
+      <div class="doc-list" id="doc-list"></div>
+      <p class="storage-note">
+        Everything is saved only in this browser (local storage). Clearing your
+        browser data, or using a different browser or device, will lose it.
+      </p>
+    </aside>
     <div class="editor">
       <textarea id="input" spellcheck="false"></textarea>
     </div>
@@ -278,19 +378,137 @@ console.log(greet("world"));
 
     const input = document.getElementById('input');
     const preview = document.getElementById('preview');
+    const docList = document.getElementById('doc-list');
 
     marked.setOptions({ gfm: true, breaks: false });
+
+    const DOCS_KEY = 'mdpdf:docs';
+    const ACTIVE_KEY = 'mdpdf:activeId';
+
+    let docs = [];
+    let activeId = null;
+
+    function loadFromStorage() {
+      try { docs = JSON.parse(localStorage.getItem(DOCS_KEY)) || []; } catch (_) { docs = []; }
+      activeId = localStorage.getItem(ACTIVE_KEY);
+      if (docs.length === 0) {
+        const first = { id: newId(), content: sample, updatedAt: Date.now() };
+        docs = [first];
+        activeId = first.id;
+        save();
+      }
+      if (!docs.some((d) => d.id === activeId)) activeId = docs[0].id;
+    }
+
+    function save() {
+      localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
+      localStorage.setItem(ACTIVE_KEY, activeId);
+    }
+
+    function newId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function activeDoc() {
+      return docs.find((d) => d.id === activeId);
+    }
+
+    function titleOf(content) {
+      const line = content.split('\n').map((l) => l.trim()).find((l) => l.length > 0);
+      if (!line) return 'Untitled';
+      return line.replace(/^#+\s*/, '').replace(/[*_`>#-]/g, '').trim().slice(0, 60) || 'Untitled';
+    }
+
+    function timeAgo(ts) {
+      const s = Math.round((Date.now() - ts) / 1000);
+      if (s < 60) return 'just now';
+      const m = Math.round(s / 60);
+      if (m < 60) return m + 'm ago';
+      const h = Math.round(m / 60);
+      if (h < 24) return h + 'h ago';
+      const d = Math.round(h / 24);
+      if (d < 7) return d + 'd ago';
+      return new Date(ts).toLocaleDateString();
+    }
 
     function render() {
       preview.innerHTML = marked.parse(input.value);
       preview.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
     }
 
-    input.value = sample;
-    render();
-    input.addEventListener('input', render);
+    function renderList() {
+      const ordered = [...docs].sort((a, b) => b.updatedAt - a.updatedAt);
+      docList.innerHTML = '';
+      for (const doc of ordered) {
+        const item = document.createElement('div');
+        item.className = 'doc-item' + (doc.id === activeId ? ' active' : '');
+        item.innerHTML =
+          '<div class="doc-item-main">' +
+            '<div class="doc-item-title"></div>' +
+            '<div class="doc-item-time"></div>' +
+          '</div>' +
+          '<button class="doc-delete" title="Delete">&times;</button>';
+        item.querySelector('.doc-item-title').textContent = titleOf(doc.content);
+        item.querySelector('.doc-item-time').textContent = timeAgo(doc.updatedAt);
+        item.addEventListener('click', () => selectDoc(doc.id));
+        item.querySelector('.doc-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteDoc(doc.id);
+        });
+        docList.appendChild(item);
+      }
+    }
 
+    function selectDoc(id) {
+      activeId = id;
+      input.value = activeDoc().content;
+      save();
+      render();
+      renderList();
+    }
+
+    function newDoc() {
+      const doc = { id: newId(), content: '', updatedAt: Date.now() };
+      docs.push(doc);
+      activeId = doc.id;
+      input.value = '';
+      save();
+      render();
+      renderList();
+      input.focus();
+    }
+
+    function deleteDoc(id) {
+      docs = docs.filter((d) => d.id !== id);
+      if (docs.length === 0) {
+        newDoc();
+        return;
+      }
+      if (activeId === id) {
+        activeId = [...docs].sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
+        input.value = activeDoc().content;
+        render();
+      }
+      save();
+      renderList();
+    }
+
+    input.addEventListener('input', () => {
+      const doc = activeDoc();
+      doc.content = input.value;
+      doc.updatedAt = Date.now();
+      save();
+      render();
+      renderList();
+    });
+
+    document.getElementById('new-doc').addEventListener('click', newDoc);
     document.getElementById('download').addEventListener('click', () => window.print());
+
+    loadFromStorage();
+    input.value = activeDoc().content;
+    render();
+    renderList();
   </script>
 </body>
 </html>
