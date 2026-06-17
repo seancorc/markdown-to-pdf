@@ -49,6 +49,20 @@ module.exports = async (req, res) => {
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
     await page.setContent(html, { waitUntil: 'load' });
+    // Wait for Twemoji (and other) images to finish loading before printing.
+    await page.evaluate(() =>
+      Promise.all(
+        [...document.images]
+          .filter((img) => !img.complete)
+          .map(
+            (img) =>
+              new Promise((resolve) => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+              })
+          )
+      )
+    );
     const pdf = await page.pdf({
       printBackground: true,
       preferCSSPageSize: true,
