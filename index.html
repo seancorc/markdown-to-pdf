@@ -257,19 +257,38 @@
       line-height: 1.5;
     }
 
+    /* Scroll wrapper added around tables in JS; keeps wide tables inside the card */
+    .document .table-scroll {
+      overflow-x: auto;
+      margin: 0 0 1em;
+      -webkit-overflow-scrolling: touch;
+    }
+    .document .table-scroll table { margin: 0; }
+
     .document table {
       border-collapse: collapse;
       width: 100%;
+      max-width: 100%;
+      table-layout: fixed;
       margin: 0 0 1em;
-      font-size: 0.95em;
+      font-size: 0.9em;
     }
     .document th, .document td {
       border: 1px solid #d0d7de;
-      padding: 7px 12px;
+      padding: 7px 10px;
       text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      hyphens: auto;
     }
     .document th { background: #f6f8fa; font-weight: 600; }
     .document tr:nth-child(2n) td { background: #fafbfc; }
+    .document td code, .document th code {
+      white-space: normal;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
 
     .document img { max-width: 100%; }
     .document img.emoji {
@@ -311,9 +330,14 @@
         border-radius: 0;
         font-size: 12pt;
       }
-      .document pre, .document img, .document table, .document blockquote, .document .mermaid-diagram { break-inside: avoid; }
+      .document .table-scroll { overflow: visible; }
+      .document pre, .document img, .document blockquote, .document .mermaid-diagram { break-inside: avoid; }
       .document h1, .document h2, .document h3,
       .document h4, .document h5, .document h6 { break-after: avoid; }
+      /* Let tables span pages, but keep individual rows intact */
+      .document table { break-inside: auto; page-break-inside: auto; }
+      .document thead { display: table-header-group; }
+      .document tr { break-inside: avoid; page-break-inside: avoid; }
     }
     @page { margin: 18mm; }
   </style>
@@ -444,9 +468,20 @@ console.log(greet("world"));
     mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
     let mermaidCounter = 0;
 
+    function wrapTables() {
+      preview.querySelectorAll('table').forEach((table) => {
+        if (table.parentElement && table.parentElement.classList.contains('table-scroll')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'table-scroll';
+        table.parentNode.insertBefore(wrap, table);
+        wrap.appendChild(table);
+      });
+    }
+
     function render() {
       preview.innerHTML = marked.parse(input.value);
       preview.querySelectorAll('pre code:not(.language-mermaid)').forEach((block) => hljs.highlightElement(block));
+      wrapTables();
       renderMermaid();
     }
 
