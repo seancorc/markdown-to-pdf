@@ -159,8 +159,18 @@
       color: var(--muted);
     }
 
-    .editor, .preview-pane {
-      flex: 1 1 50%;
+    /* Editor is intentionally the smaller pane (~36%); the preview gets the rest
+       (~64%) so it can show a full-size page. The editor is capped so very wide
+       screens give the page even more room. */
+    .editor {
+      flex: 36 1 0%;
+      min-width: 0;
+      max-width: 520px;
+      overflow: auto;
+    }
+
+    .preview-pane {
+      flex: 64 1 0%;
       min-width: 0;
       overflow: auto;
     }
@@ -182,23 +192,26 @@
     }
 
     .preview-pane {
-      display: flex;
-      justify-content: center;
+      display: block;
       padding: 32px;
+      background: var(--bg);
     }
 
-    /* The printable document */
+    /* The printable document — sized as a real US Letter page so the preview
+       wraps text and tables exactly like the downloaded PDF. It is visually
+       scaled to fit the pane (see fitPreview() in script) via the `zoom`
+       property, which keeps the 8.5in layout width intact for wrapping. */
     .document {
       background: #fff;
-      width: 100%;
-      max-width: 760px;
-      padding: 56px 64px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
+      width: 8.5in;
+      min-height: 11in;
+      margin: 0 auto;
+      padding: 18mm;
+      border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 10px 30px rgba(0,0,0,0.10);
       color: #1f2328;
       font-size: 16px;
       line-height: 1.7;
-      height: max-content;
     }
 
     .document > :first-child { margin-top: 0; }
@@ -313,7 +326,9 @@
     @media (max-width: 720px) {
       .workspace { flex-direction: column; }
       .sidebar { width: auto; flex: 0 0 auto; max-height: 30vh; border-right: none; border-bottom: 1px solid var(--border); }
+      .editor { flex: 1 1 40%; min-width: 0; max-width: none; }
       #input { border-right: none; border-bottom: 1px solid var(--border); }
+      .preview-pane { flex: 1 1 60%; padding: 16px; }
     }
 
     /* Print: show only the document, formatted for paper */
@@ -325,10 +340,14 @@
       .document {
         max-width: none;
         width: auto;
+        min-height: 0;
+        margin: 0;
         padding: 0;
         box-shadow: none;
         border-radius: 0;
         font-size: 12pt;
+        /* The on-screen fit-to-width zoom must never carry into print/PDF. */
+        zoom: 1 !important;
       }
       .document .table-scroll { overflow: visible; }
       .document pre, .document img, .document blockquote, .document .mermaid-diagram { break-inside: avoid; }
@@ -339,7 +358,7 @@
       .document thead { display: table-header-group; }
       .document tr { break-inside: avoid; page-break-inside: avoid; }
     }
-    @page { margin: 18mm; }
+    @page { size: Letter; margin: 18mm; }
   </style>
 </head>
 <body>
@@ -412,9 +431,27 @@ console.log(greet("world"));
 
     const input = document.getElementById('input');
     const preview = document.getElementById('preview');
+    const previewPane = document.querySelector('.preview-pane');
     const docList = document.getElementById('doc-list');
 
     marked.setOptions({ gfm: true, breaks: false });
+
+    // The preview renders the document at a true Letter width (96 CSS px per
+    // inch) so text and tables wrap exactly like the PDF. We then scale it down
+    // with `zoom` to fit the available pane width, like a PDF viewer's
+    // fit-to-width. `zoom` (unlike transform) shrinks the layout box too, so
+    // scrolling and centering stay correct, and the 8.5in width used for
+    // wrapping is preserved.
+    const PAGE_WIDTH_PX = 8.5 * 96;
+
+    function fitPreview() {
+      const cs = getComputedStyle(previewPane);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const available = previewPane.clientWidth - padX;
+      if (!available || available <= 0) return;
+      const scale = Math.min(1, available / PAGE_WIDTH_PX);
+      preview.style.zoom = String(scale);
+    }
 
     const DOCS_KEY = 'mdpdf:docs';
     const ACTIVE_KEY = 'mdpdf:activeId';
@@ -482,6 +519,7 @@ console.log(greet("world"));
       preview.innerHTML = marked.parse(input.value);
       preview.querySelectorAll('pre code:not(.language-mermaid)').forEach((block) => hljs.highlightElement(block));
       wrapTables();
+      fitPreview();
       renderMermaid();
     }
 
@@ -501,6 +539,8 @@ console.log(greet("world"));
           // Leave the original code block in place if the diagram is invalid.
         }
       }
+      // Diagrams change the page height (and may add a scrollbar), so re-fit.
+      fitPreview();
     }
 
     function renderList() {
@@ -577,6 +617,8 @@ console.log(greet("world"));
     // images before sending HTML to the PDF renderer.
     function prepareHtmlForPdf() {
       const clone = preview.cloneNode(true);
+      // Drop the fit-to-width preview zoom so the PDF renders at full page size.
+      clone.style.zoom = '';
       twemoji.parse(clone, {
         base: TWEMOJI_BASE,
         folder: 'svg',
@@ -626,10 +668,13 @@ console.log(greet("world"));
     document.getElementById('new-doc').addEventListener('click', newDoc);
     downloadBtn.addEventListener('click', downloadPdf);
 
+    window.addEventListener('resize', fitPreview);
+
     loadFromStorage();
     input.value = activeDoc().content;
     render();
     renderList();
+    fitPreview();
   </script>
 </body>
 </html>
